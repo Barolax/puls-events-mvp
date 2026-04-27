@@ -2,7 +2,7 @@ import os
 from typing import TypedDict, Annotated
 from dotenv import load_dotenv
 from langgraph.graph import StateGraph, END
-from mistralai.client import MistralClient as Mistral
+from mistralai import Mistral
 import httpx
 
 from agent_rag import run_rag_agent

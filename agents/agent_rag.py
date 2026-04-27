@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 from qdrant_client.models import SearchRequest
-from mistralai.client import MistralClient as Mistral
+from mistralai import Mistral
 
 load_dotenv(override=True)
 
