@@ -15,8 +15,9 @@ from database import get_db, init_db, User
 from auth import (
     create_user, create_otp, verify_otp, create_access_token,
     get_current_user, check_rate_limit, record_attempt,
-    send_otp_simulation, verify_password
-)
+    send_otp_simulation)
+
+from prometheus_fastapi_instrumentator import Instrumentator
 
 load_dotenv(override=True)
 
@@ -25,6 +26,8 @@ app = FastAPI(
     description="API du chatbot RAG multi-agents pour la découverte d'événements culturels",
     version="1.0.0"
 )
+
+Instrumentator().instrument(app).expose(app)
 
 # Initialisation DB au démarrage
 init_db()
