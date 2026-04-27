@@ -3,7 +3,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'agents'))
 sys.path.append(os.path.dirname(__file__))
 
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, status, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
@@ -184,6 +184,33 @@ def chat(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/internal/token")
+def get_internal_token(
+    x_api_key: str = Header(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint interne — génère un JWT pour Chainlit.
+    Protégé par clé API interne, jamais exposé publiquement.
+    """
+    internal_key = os.getenv("INTERNAL_API_KEY")
+    if x_api_key != internal_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Clé API interne invalide"
+        )
+
+    # Crée ou récupère l'utilisateur interne Chainlit
+    email = "chainlit@puls-events.internal"
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        user = User(email=email)
+        db.add(user)
+        db.commit()
+
+    token = create_access_token({"sub": email})
+    return {"access_token": token, "token_type": "bearer"}
 
 
 @app.get("/history/{session_id}", response_model=HistoryResponse)
