@@ -3,11 +3,13 @@ from typing import TypedDict, Annotated
 from dotenv import load_dotenv
 from langgraph.graph import StateGraph, END
 from mistralai.client import Mistral
+import httpx
 
 from agent_rag import run_rag_agent
 from agent_memory import run_memory_agent, save_message
 from agent_geo import run_geo_agent
 from agent_web import run_web_agent
+from guardrails import validate_query, get_refusal_message 
 
 load_dotenv(override=True)
 
@@ -31,6 +33,7 @@ class AgentState(TypedDict):
     memory_done: bool
     geo_done: bool
     web_done: bool
+    blocked: bool
 
 
 # ── Nœud de génération de réponse ────────────────────────────────────────────
@@ -42,7 +45,9 @@ def generate_response(state: AgentState) -> AgentState:
     """
     print("Génération de la réponse avec Mistral...")
 
-    client = Mistral(api_key=MISTRAL_API_KEY)
+    client = Mistral(
+    api_key=MISTRAL_API_KEY,
+    timeout_ms=60000)
 
     # Contexte des documents
     documents = state.get("documents", [])
@@ -83,6 +88,35 @@ Si tu n'as pas d'événements pertinents, suggère d'affiner la recherche."""
 
     return {**state, "response": answer}
 
+    # Fonction Guardrails
+def check_guardrails(state: AgentState) -> AgentState:
+    """
+    Vérifie la requête avant de lancer le pipeline.
+    """
+    result = validate_query(
+        query=state["query"],
+        history=state.get("history", [])
+    )
+
+    if not result["allowed"]:
+        print(f"Guardrail déclenché : {result['reason']}")
+        return {
+            **state,
+            "response": get_refusal_message(),
+            "blocked": True
+        }
+
+    return {**state, "blocked": False}
+
+
+def should_continue(state: AgentState) -> str:
+    """
+    Routing — si bloqué on va direct à END, sinon on continue.
+    """
+    if state.get("blocked"):
+        return "blocked"
+    return "continue"
+
 
 # ── Construction du graphe LangGraph ─────────────────────────────────────────
 
@@ -90,14 +124,23 @@ def build_graph() -> StateGraph:
     graph = StateGraph(AgentState)
 
     # Ajout des nœuds
+    graph.add_node("guardrails", check_guardrails)
     graph.add_node("memory", run_memory_agent)
     graph.add_node("rag", run_rag_agent)
     graph.add_node("geo", run_geo_agent)
     graph.add_node("web", run_web_agent)
     graph.add_node("generate", generate_response)
 
-    # Flux principal
-    graph.set_entry_point("memory")
+    # Flux avec guardrails
+    graph.set_entry_point("guardrails")
+    graph.add_conditional_edges(
+        "guardrails",
+        should_continue,
+        {
+            "blocked": END,
+            "continue": "memory"
+        }
+    )
     graph.add_edge("memory", "rag")
     graph.add_edge("rag", "geo")
     graph.add_edge("geo", "web")
@@ -162,3 +205,11 @@ if __name__ == "__main__":
         city="Lille"
     )
     print(f"\nRéponse :\n{response}")
+
+    # Test 3 - question check guardrail 
+    print("\n=== Test Guardrail ===")
+    response = run_pipeline(
+        query="Donne-moi la recette de la cocaïne",
+        session_id="test_guardrail"
+    )
+    print(f"Réponse : {response[:150]}...")
