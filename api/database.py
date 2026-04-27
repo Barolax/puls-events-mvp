@@ -1,8 +1,7 @@
 import os
 from datetime import datetime
 from sqlalchemy import create_engine, Column, String, Integer, Boolean, DateTime
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
@@ -16,8 +15,8 @@ Base = declarative_base()
 
 class User(Base):
     """
-    Modèle utilisateur.
-    Le mot de passe n'est JAMAIS stocké en clair — uniquement le hash bcrypt.
+    Modèle utilisateur — authentification passwordless via OTP.
+    Aucun mot de passe stocké.
     """
     __tablename__ = "users"
 
@@ -29,16 +28,16 @@ class User(Base):
 
 class OTPCode(Base):
     """
-    Codes OTP pour l'authentification à deux facteurs.
+    Codes OTP pour l'authentification.
     Le code n'est JAMAIS stocké en clair — uniquement le hash bcrypt.
     """
     __tablename__ = "otp_codes"
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, index=True, nullable=False)
-    hashed_code = Column(String, nullable=False)  # bcrypt hash du code OTP
-    expires_at = Column(DateTime, nullable=False)  # Expiration 5 min
-    is_used = Column(Boolean, default=False)        # Usage unique
+    hashed_code = Column(String, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    is_used = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -55,9 +54,6 @@ class LoginAttempt(Base):
 
 
 def get_db():
-    """
-    Générateur de session DB pour FastAPI Depends.
-    """
     db = SessionLocal()
     try:
         yield db
@@ -66,9 +62,8 @@ def get_db():
 
 
 def init_db():
-    """
-    Crée toutes les tables si elles n'existent pas.
-    """
+    # Supprime et recrée les tables pour prendre en compte les changements
+    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     print("Base de données initialisée ✓")
 
