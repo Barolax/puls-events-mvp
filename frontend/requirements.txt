@@ -1,0 +1,13 @@
+chainlit
+python-dotenv
+redis
+qdrant-client
+mistralai==1.5.0
+langchain
+langchain-mistralai
+langgraph
+smolagents
+ddgs
+langchain-text-splitters
+httpx
+requests

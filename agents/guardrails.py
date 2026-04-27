@@ -1,7 +1,7 @@
 import os
 import sys
 from dotenv import load_dotenv, find_dotenv
-from mistralai.client import Mistral
+from mistralai.client import MistralClient as Mistral
 
 load_dotenv(find_dotenv(), override=True)
 
