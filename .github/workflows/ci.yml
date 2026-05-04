@@ -46,8 +46,7 @@ jobs:
         run: sleep 60
 
       - name: Wait for ingestion
-        run:
-          sleep 90
+        run: sleep 90
 
       - name: Run tests
         run: docker compose exec -T api pytest tests/ -v --tb=short
