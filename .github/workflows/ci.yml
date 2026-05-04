@@ -46,10 +46,8 @@ jobs:
         run: sleep 30
 
       - name: Wait for ingestion
-        run: |
-          echo "Attente de l'ingestion..."
-          sleep 60
-          docker compose logs ingestion
+        run:
+          sleep 90
 
       - name: Run tests
         run: docker compose exec -T api pytest tests/ -v --tb=short
