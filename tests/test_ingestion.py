@@ -154,7 +154,10 @@ class TestVectorizer:
     def test_qdrant_collection_exists(self):
         """Vérifie que la collection Qdrant existe."""
         from qdrant_client import QdrantClient
-        client = QdrantClient(host="localhost", port=6333)
+        client = QdrantClient(
+            host=os.getenv("QDRANT_HOST", "qdrant"),
+            port=int(os.getenv("QDRANT_PORT", 6333))
+        )
         collections = client.get_collections().collections
         names = [c.name for c in collections]
         assert "puls_events" in names
@@ -162,6 +165,9 @@ class TestVectorizer:
     def test_qdrant_collection_not_empty(self):
         """Vérifie que la collection contient des vecteurs."""
         from qdrant_client import QdrantClient
-        client = QdrantClient(host="localhost", port=6333)
+        client = QdrantClient(
+            host=os.getenv("QDRANT_HOST", "qdrant"),
+            port=int(os.getenv("QDRANT_PORT", 6333))
+        )
         info = client.get_collection("puls_events")
         assert info.points_count > 0

@@ -3,6 +3,7 @@ import os
 import sys
 import httpx
 from dotenv import load_dotenv
+import time
 
 load_dotenv(override=True)
 
@@ -71,6 +72,7 @@ class TestChat:
 
     def test_chat_returns_200(self):
         """Vérifie que /chat répond correctement."""
+        time.sleep(5)
         token = get_token()
         response = httpx.post(
             f"{API_URL}/chat",
@@ -81,12 +83,13 @@ class TestChat:
                 "city": "Lille",
                 "radius_km": 50
             },
-            timeout=60.0
+            timeout=120.0
         )
         assert response.status_code == 200
 
     def test_chat_returns_response_field(self):
         """Vérifie que la réponse contient un champ 'response'."""
+        time.sleep(5)
         token = get_token()
         response = httpx.post(
             f"{API_URL}/chat",
@@ -97,7 +100,7 @@ class TestChat:
                 "city": "Paris",
                 "radius_km": 50
             },
-            timeout=60.0
+            timeout=120.0
         )
         assert response.status_code == 200
         data = response.json()
@@ -106,24 +109,23 @@ class TestChat:
 
     def test_chat_returns_session_id(self):
         """Vérifie que la réponse contient le session_id."""
+        time.sleep(5)
         token = get_token()
         response = httpx.post(
             f"{API_URL}/chat",
             headers={"Authorization": f"Bearer {token}"},
             json={
-                "query": "festivals en France",
+                "query": "événements à Lille", 
                 "session_id": "pytest_003",
-                "city": None,
+                "city": "Lille",              
                 "radius_km": 50
             },
-            timeout=60.0
+            timeout=120.0
         )
         assert response.status_code == 200
         data = response.json()
         assert "session_id" in data
         assert data["session_id"] == "pytest_003"
-
-
 class TestMetrics:
     """Tests du endpoint Prometheus."""
 

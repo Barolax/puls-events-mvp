@@ -20,3 +20,4 @@ prometheus-fastapi-instrumentator
 langfuse
 httpx
 requests
+pytest

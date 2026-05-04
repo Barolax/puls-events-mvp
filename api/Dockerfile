@@ -9,6 +9,7 @@ COPY api/ ./api/
 COPY agents/ ./agents/
 COPY ingestion/ ./ingestion/
 COPY .env .
+COPY tests/ ./tests/
 
 ENV PYTHONPATH=/app
 

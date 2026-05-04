@@ -36,6 +36,19 @@ services:
     restart: always
     volumes:
       - ./puls_events.db:/app/puls_events.db
+    
+  # ── Ingestion initiale ────────────────────────────────────────────────────
+  ingestion:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    container_name: puls-events-ingestion
+    command: python ingestion/vectorizer.py
+    env_file:
+      - .env
+    depends_on:
+      - qdrant
+    restart: "no"
 
   # ── Frontend Chainlit ─────────────────────────────────────────────────────
   frontend:
