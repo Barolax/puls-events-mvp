@@ -1,0 +1,57 @@
+name: CI - Puls-Events MVP
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create .env file
+        run: |
+          cat > .env << EOF
+          MISTRAL_API_KEY=${{ secrets.MISTRAL_API_KEY }}
+          OPENAGENDA_API_KEY=${{ secrets.OPENAGENDA_API_KEY }}
+          QDRANT_HOST=qdrant
+          QDRANT_PORT=6333
+          QDRANT_COLLECTION=puls_events
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+          JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+          INTERNAL_API_KEY=${{ secrets.INTERNAL_API_KEY }}
+          HUGGINGFACE_API_KEY=${{ secrets.HUGGINGFACE_API_KEY }}
+          LANGFUSE_PUBLIC_KEY=${{ secrets.LANGFUSE_PUBLIC_KEY }}
+          LANGFUSE_SECRET_KEY=${{ secrets.LANGFUSE_SECRET_KEY }}
+          LANGFUSE_HOST=https://cloud.langfuse.com
+          API_URL=http://api:8000
+          EOF
+
+      - name: Build images
+        run: docker compose build
+
+      - name: Start services
+        run: docker compose up -d
+
+      - name: Wait for services
+        run: sleep 30
+
+      - name: Wait for ingestion
+        run: |
+          timeout 120 bash -c 'until docker compose logs ingestion | grep "Pipeline terminé"; do sleep 5; done'
+
+      - name: Run tests
+        run: docker compose exec -T api pytest tests/ -v --tb=short
+
+      - name: Stop services
+        if: always()
+        run: docker compose down
