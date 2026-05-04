@@ -42,11 +42,8 @@ jobs:
       - name: Start services
         run: docker compose up -d
 
-      - name: Wait for services
-        run: sleep 60
-
-      - name: Wait for ingestion
-        run: sleep 90
+      - name: Wait for services and ingestion
+        run: sleep 120
 
       - name: Run tests
         run: docker compose exec -T api pytest tests/ -v --tb=short
