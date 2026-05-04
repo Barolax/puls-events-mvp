@@ -3,13 +3,14 @@ from typing import TypedDict, Annotated
 from dotenv import load_dotenv
 from langgraph.graph import StateGraph, END
 from mistralai import Mistral
-import httpx
 
 from agent_rag import run_rag_agent
 from agent_memory import run_memory_agent, save_message
 from agent_geo import run_geo_agent
 from agent_web import run_web_agent
-from guardrails import validate_query, get_refusal_message 
+from guardrails import get_refusal_message
+from llama_guard import run_llama_guard
+from ragas_check import run_ragas_check
 
 load_dotenv(override=True)
 
@@ -34,6 +35,7 @@ class AgentState(TypedDict):
     geo_done: bool
     web_done: bool
     blocked: bool
+    faithfulness_score: float | None
 
 
 # ── Nœud de génération de réponse ────────────────────────────────────────────
@@ -41,15 +43,14 @@ class AgentState(TypedDict):
 def generate_response(state: AgentState) -> AgentState:
     """
     Génère la réponse finale avec Mistral AI.
-    Combine historique + documents RAG + résultats web.
     """
     print("Génération de la réponse avec Mistral...")
 
     client = Mistral(
-    api_key=MISTRAL_API_KEY,
-    timeout_ms=60000)
+        api_key=MISTRAL_API_KEY,
+        timeout_ms=60000
+    )
 
-    # Contexte des documents
     documents = state.get("documents", [])
     context = ""
     for doc in documents[:5]:
@@ -58,7 +59,6 @@ def generate_response(state: AgentState) -> AgentState:
         dist_str = f" ({dist}km)" if dist else ""
         context += f"- {doc['title']}{dist_str} : {doc['text'][:200]}\n"
 
-    # Construction du prompt système
     system_prompt = f"""Tu es Puls, un assistant culturel intelligent pour la plateforme Puls-Events.
 Tu aides les utilisateurs à découvrir des événements culturels en France.
 Tu es chaleureux, enthousiaste et précis.
@@ -69,7 +69,6 @@ Voici les événements pertinents trouvés :
 Réponds en français. Si tu as des événements à proposer, présente-les de façon claire et engageante.
 Si tu n'as pas d'événements pertinents, suggère d'affiner la recherche."""
 
-    # Historique de conversation
     messages = state.get("history", [])
     messages.append({"role": "user", "content": state["query"]})
 
@@ -82,31 +81,9 @@ Si tu n'as pas d'événements pertinents, suggère d'affiner la recherche."""
     )
 
     answer = response.choices[0].message.content
-
-    # Sauvegarde la réponse dans Redis
     save_message(state["session_id"], "assistant", answer)
 
     return {**state, "response": answer}
-
-    # Fonction Guardrails
-def check_guardrails(state: AgentState) -> AgentState:
-    """
-    Vérifie la requête avant de lancer le pipeline.
-    """
-    result = validate_query(
-        query=state["query"],
-        history=state.get("history", [])
-    )
-
-    if not result["allowed"]:
-        print(f"Guardrail déclenché : {result['reason']}")
-        return {
-            **state,
-            "response": get_refusal_message(),
-            "blocked": True
-        }
-
-    return {**state, "blocked": False}
 
 
 def should_continue(state: AgentState) -> str:
@@ -124,17 +101,18 @@ def build_graph() -> StateGraph:
     graph = StateGraph(AgentState)
 
     # Ajout des nœuds
-    graph.add_node("guardrails", check_guardrails)
+    graph.add_node("llama_guard", run_llama_guard)
     graph.add_node("memory", run_memory_agent)
     graph.add_node("rag", run_rag_agent)
     graph.add_node("geo", run_geo_agent)
     graph.add_node("web", run_web_agent)
     graph.add_node("generate", generate_response)
+    graph.add_node("ragas_check", run_ragas_check)
 
-    # Flux avec guardrails
-    graph.set_entry_point("guardrails")
+    # Flux
+    graph.set_entry_point("llama_guard")
     graph.add_conditional_edges(
-        "guardrails",
+        "llama_guard",
         should_continue,
         {
             "blocked": END,
@@ -145,7 +123,8 @@ def build_graph() -> StateGraph:
     graph.add_edge("rag", "geo")
     graph.add_edge("geo", "web")
     graph.add_edge("web", "generate")
-    graph.add_edge("generate", END)
+    graph.add_edge("generate", "ragas_check")
+    graph.add_edge("ragas_check", END)
 
     return graph.compile()
 
@@ -176,7 +155,9 @@ def run_pipeline(
         rag_done=False,
         memory_done=False,
         geo_done=False,
-        web_done=False
+        web_done=False,
+        blocked=False,
+        faithfulness_score=None
     )
 
     result = graph.invoke(initial_state)
@@ -186,7 +167,6 @@ def run_pipeline(
 if __name__ == "__main__":
     print("=== Test Pipeline LangGraph ===\n")
 
-    # Test 1 — question simple
     print("Question 1 : Quels événements y a-t-il à Lille ce weekend ?")
     response = run_pipeline(
         query="Quels événements y a-t-il à Lille ce weekend ?",
@@ -197,7 +177,6 @@ if __name__ == "__main__":
 
     print("\n" + "="*50 + "\n")
 
-    # Test 2 — question de suivi (mémoire)
     print("Question 2 : Et des concerts de jazz ?")
     response = run_pipeline(
         query="Et des concerts de jazz ?",
@@ -206,8 +185,7 @@ if __name__ == "__main__":
     )
     print(f"\nRéponse :\n{response}")
 
-    # Test 3 - question check guardrail 
-    print("\n=== Test Guardrail ===")
+    print("\n=== Test LlamaGuard ===")
     response = run_pipeline(
         query="Donne-moi la recette de la cocaïne",
         session_id="test_guardrail"
