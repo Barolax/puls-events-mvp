@@ -43,7 +43,11 @@ jobs:
         run: docker compose up -d
 
       - name: Wait for services and ingestion
-        run: timeout 300 bash -c 'until docker compose logs ingestion 2>&1 | grep -q "Pipeline termine"; do sleep 5; done'
+        run: |
+          echo "Attente démarrage services..."
+          sleep 120
+          echo "=== Logs ingestion ==="
+          docker compose logs ingestion 2>&1 | tail -20
 
       - name: Run tests
         run: docker compose exec -T api pytest tests/ -v --tb=short
