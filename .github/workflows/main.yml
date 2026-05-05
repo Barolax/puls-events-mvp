@@ -19,22 +19,20 @@ jobs:
 
       - name: Create .env file
         run: |
-          cat > .env << EOF
-          MISTRAL_API_KEY=${{ secrets.MISTRAL_API_KEY }}
-          OPENAGENDA_API_KEY=${{ secrets.OPENAGENDA_API_KEY }}
-          QDRANT_HOST=qdrant
-          QDRANT_PORT=6333
-          QDRANT_COLLECTION=puls_events
-          REDIS_HOST=redis
-          REDIS_PORT=6379
-          JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
-          INTERNAL_API_KEY=${{ secrets.INTERNAL_API_KEY }}
-          HUGGINGFACE_API_KEY=${{ secrets.HUGGINGFACE_API_KEY }}
-          LANGFUSE_PUBLIC_KEY=${{ secrets.LANGFUSE_PUBLIC_KEY }}
-          LANGFUSE_SECRET_KEY=${{ secrets.LANGFUSE_SECRET_KEY }}
-          LANGFUSE_HOST=https://cloud.langfuse.com
-          API_URL=http://api:8000
-          EOF
+          echo "MISTRAL_API_KEY=${{ secrets.MISTRAL_API_KEY }}" >> .env
+          echo "OPENAGENDA_API_KEY=${{ secrets.OPENAGENDA_API_KEY }}" >> .env
+          echo "QDRANT_HOST=qdrant" >> .env
+          echo "QDRANT_PORT=6333" >> .env
+          echo "QDRANT_COLLECTION=puls_events" >> .env
+          echo "REDIS_HOST=redis" >> .env
+          echo "REDIS_PORT=6379" >> .env
+          echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}" >> .env
+          echo "INTERNAL_API_KEY=${{ secrets.INTERNAL_API_KEY }}" >> .env
+          echo "HUGGINGFACE_API_KEY=${{ secrets.HUGGINGFACE_API_KEY }}" >> .env
+          echo "LANGFUSE_PUBLIC_KEY=${{ secrets.LANGFUSE_PUBLIC_KEY }}" >> .env
+          echo "LANGFUSE_SECRET_KEY=${{ secrets.LANGFUSE_SECRET_KEY }}" >> .env
+          echo "LANGFUSE_HOST=https://cloud.langfuse.com" >> .env
+          echo "API_URL=http://api:8000" >> .env
 
       - name: Build images
         run: docker compose build
