@@ -96,7 +96,7 @@ if __name__ == "__main__":
     print("=== Pipeline d'ingestion ===\n")
 
     print("1. Récupération des événements...")
-    events = fetch_all_events(size_per_agenda=10)
+    events = fetch_all_events(size_per_agenda=100) 
 
     print("\n2. Validation des données...")
     valid_events, invalid_events = validate_events(events)

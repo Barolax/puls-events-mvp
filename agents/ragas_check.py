@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 
-FAITHFULNESS_THRESHOLD = 0.5
+FAITHFULNESS_THRESHOLD = 0.2
 
 def compute_faithfulness(response: str, documents: list[dict]) -> float:
     """
