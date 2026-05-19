@@ -1,8 +1,9 @@
 import os
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
-from qdrant_client.models import SearchRequest
+from qdrant_client.models import Filter, FieldCondition, MatchValue
 from mistralai import Mistral
+import cohere
 
 load_dotenv(override=True)
 
@@ -10,8 +11,10 @@ QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", 6333))
 COLLECTION_NAME = os.getenv("QDRANT_COLLECTION", "puls_events")
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
+COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 EMBEDDING_MODEL = "mistral-embed"
-TOP_K = 5  # Nombre de résultats à retourner
+TOP_K = 10   # On récupère plus de résultats pour le reranking
+TOP_K_RERANK = 5  # On garde les 5 meilleurs après reranking
 
 
 def get_qdrant_client() -> QdrantClient:
@@ -30,17 +33,47 @@ def embed_query(query: str) -> list[float]:
     return response.data[0].embedding
 
 
+def rerank_documents(query: str, documents: list[dict]) -> list[dict]:
+    """
+    Réordonne les documents par pertinence avec Cohere Rerank.
+    """
+    if not COHERE_API_KEY or not documents:
+        return documents
+
+    try:
+        co = cohere.Client(COHERE_API_KEY)
+        texts = [f"{doc['title']} : {doc['text'][:300]}" for doc in documents]
+
+        results = co.rerank(
+            model="rerank-multilingual-v3.0",
+            query=query,
+            documents=texts,
+            top_n=TOP_K_RERANK
+        )
+
+        reranked = []
+        for result in results.results:
+            doc = documents[result.index]
+            doc["rerank_score"] = result.relevance_score
+            reranked.append(doc)
+
+        print(f"  → Cohere Rerank : {len(reranked)} documents reranked")
+        return reranked
+
+    except Exception as e:
+        print(f"  ⚠️ Cohere Rerank error : {e} — fallback sur résultats Qdrant")
+        return documents[:TOP_K_RERANK]
+
+
 def search_events(query: str, city_filter: str = None) -> list[dict]:
     """
-    Recherche les événements pertinents dans Qdrant.
+    Recherche les événements pertinents dans Qdrant + Cohere Rerank.
     """
     client = get_qdrant_client()
     query_vector = embed_query(query)
 
-    # Filtre optionnel par ville
     query_filter = None
     if city_filter:
-        from qdrant_client.models import Filter, FieldCondition, MatchValue
         query_filter = Filter(
             must=[FieldCondition(
                 key="city",
@@ -56,7 +89,7 @@ def search_events(query: str, city_filter: str = None) -> list[dict]:
         with_payload=True
     ).points
 
-    return [
+    documents = [
         {
             "score": hit.score,
             "text": hit.payload.get("text", ""),
@@ -71,11 +104,13 @@ def search_events(query: str, city_filter: str = None) -> list[dict]:
         for hit in results
     ]
 
+    # Cohere Rerank
+    return rerank_documents(query, documents)
+
 
 def run_rag_agent(state: dict) -> dict:
     """
     Agent RAG — appelé par LangGraph.
-    Reçoit le state et retourne les documents pertinents.
     """
     query = state.get("query", "")
     city_filter = state.get("city")
@@ -89,17 +124,3 @@ def run_rag_agent(state: dict) -> dict:
         "documents": documents,
         "rag_done": True
     }
-
-
-if __name__ == "__main__":
-    # Test direct de l'agent
-    test_state = {
-        "query": "spectacle de danse à Lille",
-        "city": None
-    }
-
-    result = run_rag_agent(test_state)
-
-    print(f"\n{len(result['documents'])} documents trouvés :\n")
-    for doc in result["documents"]:
-        print(f"- {doc['title']} ({doc['city']}) — score: {doc['score']:.3f}")

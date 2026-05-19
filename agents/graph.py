@@ -163,6 +163,84 @@ def run_pipeline(
     result = graph.invoke(initial_state)
     return result["response"]
 
+# Fonction Streaming
+def stream_pipeline(
+    query: str,
+    session_id: str = "default",
+    city: str = None,
+    radius_km: float = 50
+):
+    """
+    Lance le pipeline et streame les tokens de la réponse finale.
+    """
+    graph = build_graph()
+
+    initial_state = AgentState(
+        query=query,
+        session_id=session_id,
+        city=city,
+        latitude=None,
+        longitude=None,
+        radius_km=radius_km,
+        history=[],
+        documents=[],
+        response="",
+        rag_done=False,
+        memory_done=False,
+        geo_done=False,
+        web_done=False,
+        blocked=False,
+        faithfulness_score=None
+    )
+
+    # On fait tourner tous les agents sauf generate
+    result = graph.invoke(initial_state)
+
+    if result.get("blocked"):
+        yield get_refusal_message()
+        return
+
+    # Streaming Mistral
+    client = Mistral(api_key=MISTRAL_API_KEY, timeout_ms=60000)
+
+    documents = result.get("documents", [])
+    context = ""
+    for doc in documents[:5]:
+        source = doc.get("source", "rag")
+        dist = doc.get("distance_km")
+        dist_str = f" ({dist}km)" if dist else ""
+        context += f"- {doc['title']}{dist_str} : {doc['text'][:200]}\n"
+
+    system_prompt = f"""Tu es Puls, un assistant culturel intelligent pour la plateforme Puls-Events.
+Tu aides les utilisateurs à découvrir des événements culturels en France.
+Tu es chaleureux, enthousiaste et précis.
+
+Voici les événements pertinents trouvés :
+{context if context else "Aucun événement trouvé pour cette recherche."}
+
+Réponds en français. Si tu as des événements à proposer, présente-les de façon claire et engageante.
+Si tu n'as pas d'événements pertinents, suggère d'affiner la recherche."""
+
+    messages = result.get("history", [])
+    messages.append({"role": "user", "content": query})
+
+    stream = client.chat.stream(
+        model=MISTRAL_MODEL,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            *messages
+        ]
+    )
+
+    full_response = ""
+    for chunk in stream:
+        token = chunk.data.choices[0].delta.content
+        if token:
+            full_response += token
+            yield token
+
+    save_message(session_id, "assistant", full_response)
+
 
 if __name__ == "__main__":
     print("=== Test Pipeline LangGraph ===\n")

@@ -5,11 +5,12 @@ sys.path.append(os.path.dirname(__file__))
 
 from fastapi import FastAPI, HTTPException, Depends, status, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
+from graph import run_pipeline, stream_pipeline
 
-from graph import run_pipeline
 from agent_memory import get_history, clear_session
 from database import get_db, init_db, User
 from auth import (
@@ -212,6 +213,31 @@ def get_internal_token(
     token = create_access_token({"sub": email})
     return {"access_token": token, "token_type": "bearer"}
 
+
+@app.post("/chat/stream")
+def chat_stream(
+    request: ChatRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Endpoint streaming — retourne les tokens au fur et à mesure.
+    """
+    if not request.query.strip():
+        raise HTTPException(status_code=400, detail="La question ne peut pas être vide")
+
+    def generate():
+        try:
+            for token in stream_pipeline(
+                query=request.query,
+                session_id=f"{current_user.email}_{request.session_id}",
+                city=request.city,
+                radius_km=request.radius_km
+            ):
+                yield token
+        except Exception as e:
+            yield f"Erreur : {str(e)}"
+
+    return StreamingResponse(generate(), media_type="text/plain")
 
 @app.get("/history/{session_id}", response_model=HistoryResponse)
 def get_conversation_history(

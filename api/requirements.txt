@@ -21,3 +21,4 @@ langfuse
 httpx
 requests
 pytest
+cohere

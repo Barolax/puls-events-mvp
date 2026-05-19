@@ -62,33 +62,34 @@ async def on_message(message: cl.Message):
     async with cl.Step(name="Recherche en cours...") as step:
         step.output = "Interrogation des agents (RAG, Géo, Web)..."
 
-        try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(
-                    f"{API_URL}/chat",
-                    json={
-                        "query": message.content,
-                        "session_id": str(session_id),
-                        "city": city,
-                        "radius_km": 50.0
-                    },
-                    headers={"Authorization": f"Bearer {jwt_token}"}
-                )
+    msg = cl.Message(content="")
+    await msg.send()
 
-                if response.status_code == 200:
-                    answer = response.json()["response"]
-                elif response.status_code == 401:
-                    # Token expiré — en recrée un
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            async with client.stream(
+                "POST",
+                f"{API_URL}/chat/stream",
+                json={
+                    "query": message.content,
+                    "session_id": str(session_id),
+                    "city": city,
+                    "radius_km": 50.0
+                },
+                headers={"Authorization": f"Bearer {jwt_token}"}
+            ) as response:
+                if response.status_code == 401:
                     jwt_token = await get_internal_token()
                     cl.user_session.set("jwt_token", jwt_token)
-                    answer = "Session rafraîchie, repose ta question !"
+                    await msg.stream_token("Session rafraîchie, repose ta question !")
                 else:
-                    answer = f"Erreur : {response.status_code}"
+                    async for chunk in response.aiter_text():
+                        await msg.stream_token(chunk)
 
-        except Exception as e:
-            answer = f"Désolé, une erreur est survenue : {str(e)}"
+    except Exception as e:
+        await msg.stream_token(f"Désolé, une erreur est survenue : {str(e)}")
 
-    await cl.Message(content=answer).send()
+    await msg.update()
 
 
 @cl.on_chat_end
