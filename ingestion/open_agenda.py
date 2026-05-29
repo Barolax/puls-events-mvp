@@ -10,8 +10,11 @@ BASE_URL = "https://api.openagenda.com/v2"
 AGENDA_UIDS = {
     "hauts_de_france": 57621068,
     "hauts_de_france_musees": 501473,
+    "metropole_lille": 89904399,
     "bordeaux": 1108324,
     "auvergne_rhone_alpes": 828001,
+    "ile_de_france": 56500817,
+    "grand_est": 7430297,
 }
 
 def fetch_events_from_agenda(agenda_uid: int, size: int = 100, after: str = None) -> list[dict]:
