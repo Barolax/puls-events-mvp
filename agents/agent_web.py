@@ -81,17 +81,52 @@ def parse_results(raw: str, query: str) -> list[dict]:
                 "source": "web"
             }
             if is_trusted_source(entry):
-                doc["score"] = 0.8  # Score plus élevé pour les sources fiables
+                doc["score"] = 0.8
                 trusted_results.append(doc)
             else:
                 results.append(doc)
 
-    # Priorité aux sources fiables, fallback sur tous les résultats
     final_results = trusted_results if trusted_results else results
-    
+
     if trusted_results:
         print(f"  → {len(trusted_results)} résultats de sources fiables (whitelist)")
     else:
         print(f"  → Aucune source whitelistée, fallback sur résultats généraux")
 
     return final_results[:MAX_RESULTS]
+
+
+def should_search_web(state: dict) -> bool:
+    """
+    Décide si une recherche web est nécessaire.
+    """
+    documents = state.get("documents", [])
+    query = state.get("query", "").lower()
+    real_time_keywords = [
+        "aujourd'hui", "ce soir", "ce weekend", "demain",
+        "cette semaine", "prochainement", "bientôt"
+    ]
+    has_real_time = any(kw in query for kw in real_time_keywords)
+    not_enough_results = len(documents) < 3
+    return has_real_time or not_enough_results
+
+
+def run_web_agent(state: dict) -> dict:
+    """
+    Agent Web — appelé par LangGraph.
+    Enrichit les résultats RAG avec une recherche web temps réel.
+    """
+    query = state.get("query", "")
+    city = state.get("city", "")
+    print(f"Agent Web — recherche : '{query}'")
+
+    if not should_search_web(state):
+        print("  → Recherche web non nécessaire")
+        return {**state, "web_done": True}
+
+    search_query = f"événements culturels {city} {query}" if city else f"événements culturels France {query}"
+    web_results = search_web(search_query)
+    print(f"  → {len(web_results)} résultats web")
+
+    all_documents = state.get("documents", []) + web_results
+    return {**state, "documents": all_documents, "web_done": True}
