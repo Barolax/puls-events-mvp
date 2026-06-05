@@ -82,9 +82,10 @@ def generate_response(state: AgentState) -> AgentState:
         messages=[
             {"role": "system", "content": system_prompt},
             *messages
-        ]
-    )
-
+        ],
+        temperature=0.3
+        )
+    
     answer = response.choices[0].message.content
     save_message(state["session_id"], "assistant", answer)
 
@@ -239,7 +240,8 @@ def stream_pipeline(
         messages=[
             {"role": "system", "content": system_prompt},
             *messages
-        ]
+        ],
+        temperature=0.3
     )
 
     full_response = ""
