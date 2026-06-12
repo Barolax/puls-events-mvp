@@ -1,6 +1,7 @@
 import os
 import httpx
 import chainlit as cl
+from chainlit.data.sql_alchemy import SQLAlchemyDataLayer
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
@@ -8,11 +9,37 @@ load_dotenv(override=True)
 API_URL = os.getenv("API_URL", "http://api:8000")
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "puls-events-internal-2026")
 
+# ── Users hardcodés ───────────────────────────────────────────────────────────
+USERS = {
+    "admin": ("admin123", "Admin"),
+    "demo": ("demo123", "Demo User")
+}
+
+# ── Data layer SQLite pour la mémoire des chats ───────────────────────────────
+@cl.data_layer
+def get_data_layer():
+    return SQLAlchemyDataLayer(
+        conninfo="sqlite+aiosqlite:///./chainlit.db",
+        ssl_require=False,
+        show_logger=True
+    )
+
+# ── Authentification ──────────────────────────────────────────────────────────
+@cl.password_auth_callback
+def auth_callback(username: str, password: str):
+    if username in USERS:
+        password_check, display_name = USERS[username]
+        if password == password_check:
+            user = cl.User(
+                identifier=username,
+                display_name=display_name,
+                metadata={"role": "user"}
+            )
+            return user
+    return None
+
 
 async def get_internal_token() -> str:
-    """
-    Récupère un JWT via la clé API interne.
-    """
     async with httpx.AsyncClient(timeout=10.0) as client:
         response = await client.post(
             f"{API_URL}/internal/token",
@@ -23,20 +50,23 @@ async def get_internal_token() -> str:
 
 @cl.on_chat_start
 async def on_chat_start():
-    """
-    Initialise la session et récupère un JWT interne.
-    """
+    user = cl.user_session.get("user")
+
+    if user:
+        data_layer = get_data_layer()
+        await data_layer.create_user(user)
+
     session_id = cl.user_session.get("id")
     cl.user_session.set("session_id", session_id)
     cl.user_session.set("city", None)
 
-    # Récupère le JWT une seule fois au démarrage
     token = await get_internal_token()
     cl.user_session.set("jwt_token", token)
 
+    name = user.display_name if user else "visiteur"
     await cl.Message(
         content=(
-            "👋 Bienvenue sur **Puls-Events** !\n\n"
+            f"👋 Bienvenue **{name}** sur **Puls-Events** !\n\n"
             "Je suis **Puls**, ton assistant culturel intelligent. "
             "Je peux t'aider à découvrir des événements culturels partout en France — "
             "concerts, expositions, spectacles, festivals et bien plus encore !\n\n"
@@ -48,14 +78,10 @@ async def on_chat_start():
 
 @cl.on_message
 async def on_message(message: cl.Message):
-    """
-    Traite chaque message via l'API FastAPI.
-    """
     session_id = cl.user_session.get("session_id")
     city = cl.user_session.get("city")
     jwt_token = cl.user_session.get("jwt_token")
 
-    # Détection automatique de la ville
     city = detect_city(message.content, city)
     cl.user_session.set("city", city)
 

@@ -7,4 +7,4 @@ COPY agents/ ./agents/
 COPY .env .
 ENV PYTHONPATH=/app
 WORKDIR /app/frontend
-CMD ["chainlit", "run", "app.py", "--host", "0.0.0.0", "--port", "8001"]
+CMD python3 init_db.py && chainlit run app.py --host 0.0.0.0 --port 8001
