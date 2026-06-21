@@ -32,10 +32,10 @@ async def init():
                 type TEXT NOT NULL,
                 "threadId" TEXT NOT NULL,
                 "parentId" TEXT,
-                "disableFeedback" INTEGER NOT NULL,
-                streaming INTEGER NOT NULL,
-                waiting INTEGER NOT NULL,
-                "isError" INTEGER NOT NULL,
+                "disableFeedback" INTEGER NOT NULL DEFAULT 0,
+                streaming INTEGER NOT NULL DEFAULT 0,
+                waiting INTEGER NOT NULL DEFAULT 0,
+                "isError" INTEGER NOT NULL DEFAULT 0,
                 metadata TEXT,
                 tags TEXT,
                 input TEXT,
@@ -43,16 +43,13 @@ async def init():
                 "createdAt" TEXT,
                 start TEXT,
                 "end" TEXT,
+                "showInput" TEXT,
+                language TEXT,
+                generation TEXT,
+                "waitForAnswer" INTEGER DEFAULT 0,
+                "defaultOpen" INTEGER DEFAULT 0,
+                "autoCollapse" INTEGER DEFAULT 0,
                 FOREIGN KEY ("threadId") REFERENCES threads(id)
-            )
-        """))
-        await conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS feedbacks (
-                id TEXT PRIMARY KEY,
-                "forId" TEXT NOT NULL,
-                "threadId" TEXT NOT NULL,
-                value INTEGER NOT NULL,
-                comment TEXT
             )
         """))
         await conn.execute(text("""
@@ -62,13 +59,24 @@ async def init():
                 type TEXT,
                 url TEXT,
                 "chainlitKey" TEXT,
+                "objectKey" TEXT,
                 name TEXT NOT NULL,
                 display TEXT,
                 language TEXT,
                 page INTEGER,
                 size TEXT,
                 "forId" TEXT,
-                mime TEXT
+                mime TEXT,
+                props TEXT
+            )
+        """))
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS feedbacks (
+                id TEXT PRIMARY KEY,
+                "forId" TEXT NOT NULL,
+                "threadId" TEXT NOT NULL,
+                value INTEGER NOT NULL,
+                comment TEXT
             )
         """))
         print("Tables créées avec succès !")

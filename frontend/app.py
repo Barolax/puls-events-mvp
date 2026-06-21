@@ -75,6 +75,15 @@ async def on_chat_start():
         )
     ).send()
 
+@cl.on_chat_resume
+async def on_chat_resume(thread):
+    """Reprend une conversation existante."""
+    session_id = cl.user_session.get("id")
+    cl.user_session.set("session_id", session_id)
+    cl.user_session.set("city", None)
+    
+    token = await get_internal_token()
+    cl.user_session.set("jwt_token", token)
 
 @cl.on_message
 async def on_message(message: cl.Message):
